@@ -7,14 +7,15 @@ pygame.init()
 WIDTH = 1000
 HEIGHT = 700
 SCREEN = pygame.display.set_mode((WIDTH, HEIGHT))
-generation_counter = 1
-pygame.display.set_caption(f"Iteration: {generation_counter}")
 FPS = 60
 NUMBER_OF_ENTITIES = 100
-NUMBER_OF_GENES = 16
-GEN_MIN = -1
+NUMBER_OF_GENES = 32
+NUMBER_OF_SENSORS = 16
+GEN_MIN = 0
 GEN_MAX = 1
 TOURNAMENT_SIZE = 5
+generation_counter = 1
+pygame.display.set_caption(f"Iteration: {generation_counter}")
 cars = []
 
 folder = os.path.dirname(__file__)
@@ -128,53 +129,17 @@ def main():
             if event.type == pygame.QUIT:
                 run = False
 
-        # -------------------------
-        # KEYBOARD CONTROL
-        # -------------------------
+        ## kiszámolja az autó pozícioját
+        ## returnolj x és y és angle
+        ##bemenet: érzékelő(0,1), gén(x-y között),MAX_SPEED??,TURN_SPEED??
+        #gén elérési utja: car.self.genome[i]0-15balkerék, 16-31jobb kerék
 
-        keys = pygame.key.get_pressed()
-
-        left_speed = 0
-        right_speed = 0
-
-        if keys[pygame.K_w]:
-            left_speed = MAX_SPEED
-            right_speed = MAX_SPEED
-
-        if keys[pygame.K_a]:
-            left_speed = TURN_SPEED
-            right_speed = MAX_SPEED
-
-        if keys[pygame.K_d]:
-            left_speed = MAX_SPEED
-            right_speed = TURN_SPEED
-
-        # -------------------------
-        # CAR MOVEMENT
-        # -------------------------
-
-        speed = (left_speed + right_speed) / 2
-
-        angular_speed = (
-            left_speed - right_speed
-        ) / wheel_distance
-
-        angle += angular_speed * dt
-
-        x += math.cos(angle) * speed * dt
-        y += math.sin(angle) * speed * dt
-        
-
+        #kerék_sebesség_változó = matrix_dot_product()
         # Rotate the original car surface
-        rotated_car = pygame.transform.rotate(
-            car_surface,
-            -math.degrees(angle)
-        )
+        rotated_car = pygame.transform.rotate(car_surface, -math.degrees(angle))
 
         # Put the center of the rotated car at x, y
-        rect = rotated_car.get_rect(
-            center=(int(x), int(y))
-        )
+        rect = rotated_car.get_rect(center=(int(x), int(y)))
 
         # Draw background
         SCREEN.blit(background, (0, 0))
