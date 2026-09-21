@@ -116,6 +116,6 @@ def update_checkpoints(self, checkpoints):
     distance = math.sqrt((self.x - target_x) ** 2 + (self.y - target_y) ** 2)
 
      # Ha elég közel ment (pl. 40 pixelen belülre):
-    if distance < 40:  #mi legyen a distance? mert itt kinda még nem érte el a checkpointot
+    if distance < #változó#:  #mi legyen a distance? mert itt kinda még nem érte el a checkpointot
         self.checkpoint_index += 1  # Lépünk a következő checkpointra
         self.score += 1000

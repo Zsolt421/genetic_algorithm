@@ -38,7 +38,7 @@ sensor_1 = 40
 sensor_2 = 10
 sensor_3 = -1 * sensor_1
 sensor_4 = -1 * sensor_2
-SENSOR_ANGLES = [sensor_1, sensor_2,sensor_3,sensor_4]
+SENSOR_ANGLES = [sensor_1, sensor_2, sensor_3, sensor_4]
 
 # Távolságok az autó előtt
 sensor_dist = 20
@@ -64,7 +64,7 @@ angle = -math.pi / 4
 left_speed = 0
 right_speed = 0
 
-wheel_distance = 40
+WHEEL_DISTANCE = 40
 
 
 # -------------------------
