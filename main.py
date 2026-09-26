@@ -67,6 +67,7 @@ class Car:
         self.fitness = 0
         self.genome = genome
         self.checkpoint_index = 0
+        self.alive_time = 0
 
     def read_sensors(self):
         pass
@@ -81,7 +82,7 @@ class Car:
           
         pass
 
-    def check_road(self):
+    def check_death(self, dt):
         # Ellenőrzi, hogy az autó még az úton van-e.
         # Ha lement róla, alive = False.
         color = background.get_at((int(self.x), int(self.y)))
@@ -108,14 +109,18 @@ class Car:
 
 def run_cars(dt) -> None:
     for car in cars:
-        Car.read_sensor()
+        if car.alive == True:
+            
+            car.alive_time += dt
 
-        ##
+            Car.read_sensor()
 
-        Car.check_road()
-        Car.check_checkpoint()
-        Car.calculate_fitness()
-        Car.draw(SCREEN)
+            ##
+
+            Car.check_death(dt)
+            Car.check_checkpoint()
+            Car.calculate_fitness()
+            Car.draw(SCREEN)
 
 def first_creation(NUMBER_OF_ENTITIES) -> None:
 
