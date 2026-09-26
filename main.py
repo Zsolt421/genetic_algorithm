@@ -2,93 +2,141 @@ import pygame
 import math
 import os
 import random
+import numpy as np
+
 pygame.init()
+
+# -------------------------
+# VARIABLE DEFINITION
+# -------------------------
 
 WIDTH = 1000
 HEIGHT = 700
 SCREEN = pygame.display.set_mode((WIDTH, HEIGHT))
 FPS = 60
 NUMBER_OF_ENTITIES = 100
-NUMBER_OF_GENES = 32
+#NUMBER_OF_GENES = 32
+NUM_OF_GENE_ROWS = 2
+NUM_OF_GENE_COLUMNS = 16
 NUMBER_OF_SENSORS = 16
 GEN_MIN = 0
 GEN_MAX = 1
 TOURNAMENT_SIZE = 5
-generation_counter = 1
-pygame.display.set_caption(f"Iteration: {generation_counter}")
-cars = []
-
-folder = os.path.dirname(__file__)
-
-background = pygame.image.load(
-    os.path.join(folder, "track.png")
-)
-
-background = pygame.transform.scale(
-    background, (WIDTH, HEIGHT)
-)
-
-# -------------------------
-# CAR APPEARANCE AND SETTINGS
-# -------------------------
-
-car_length = 50
-car_width = 30
-
-car_surface = pygame.Surface(
-    (car_length, car_width), pygame.SRCALPHA
-)
-
-car_surface.fill((220, 20, 20))
-
-# -------------------------
-# CAR MOVEMENT SETTINGS
-# -------------------------
-
-x = WIDTH / 2
-y = HEIGHT / 2 - 10
-
-# 0 = facing right
-angle = math.radians(-45)
-
-wheel_distance = 40
-
 MAX_SPEED = 150
 TURN_SPEED = 60
 
 
+
+generation_counter = 1
+cars = []
+
+
+# -------------------------
+# PYGAME LOAD IN
+# -------------------------
+
+pygame.display.set_caption(f"Iteration: {generation_counter}")
+folder = os.path.dirname(__file__)
+background = pygame.image.load(os.path.join(folder, "track.png"))
+background = pygame.transform.scale(background, (WIDTH, HEIGHT))
+
+
+# -------------------------
+# CAR STARTING SETTINGS
+# -------------------------
+
+STARTING_X = 265
+STARTING_Y = 627
+STARTING_ANGLE = math.radians(-166)
+wheel_distance = 40
+car_length = 50
+car_width = 30
+car_surface = pygame.Surface(
+    (car_length, car_width), pygame.SRCALPHA)
+car_surface.fill((220, 20, 20))
+
+
+
 class Car:
     def __init__(self, genome):
-        self.x = x
-        self.y = y
-        self.angle = angle
+        self.x = STARTING_X
+        self.y = STARTING_Y
+        self.angle = STARTING_ANGLE
         self.speed = MAX_SPEED
         self.alive = True
         self.fitness = 0
         self.genome = genome
+        self.checkpoint_index = 0
 
-def first_creation(NUMBER_OF_ENTITIES, NUMBER_OF_GENES) -> None:
+    def read_sensors(self):
+        pass
 
-    for j in range(NUMBER_OF_ENTITIES):
-        genome = []
+    def calculate_controls(self):
+        # A szenzorértékek és a genom alapján kiszámolja,
+        # hogyan mozogjon az autó.
+        return
 
-        for i in range(NUMBER_OF_GENES):
-            genome.append(random.uniform(GEN_MIN, GEN_MAX))
+    def move(self, dt):
+        # Frissíti az autó pozícióját és irányát az eltelt idő alapján.
+          
+        pass
 
+    def check_road(self):
+        # Ellenőrzi, hogy az autó még az úton van-e.
+        # Ha lement róla, alive = False.
+        color = background.get_at((int(self.x), int(self.y)))
+
+        r = color.r
+        g = color.g
+        b = color.b
+
+        if g > r + 30 and g > b + 30:
+            return True
+
+        return False
+
+    
+    def check_checkpoint(self):
+        # Ellenőrzi, hogy az autó elérte-e a következő checkpointot.
+        pass
+
+    def calculate_fitness(self):
+        pass
+
+    def draw(self, screen):
+        pass
+
+def run_cars(dt) -> None:
+    for car in cars:
+        Car.read_sensor()
+
+        ##
+
+        Car.check_road()
+        Car.check_checkpoint()
+        Car.calculate_fitness()
+        Car.draw(SCREEN)
+
+def first_creation(NUMBER_OF_ENTITIES) -> None:
+
+    for _ in range(NUMBER_OF_ENTITIES):
+        genome = np.random.normal(GEN_MIN, GEN_MAX,(NUM_OF_GENE_ROWS, NUM_OF_GENE_COLUMNS))
         cars.append(Car(genome))
 
 def genome_crosser(parent1, parent2) -> list:
-    child_genes = []
+    child_genes = np.empty((NUM_OF_GENE_ROWS, NUM_OF_GENE_COLUMNS))
 
-    for i in range(len(parent1.genome)):
-        choice = random.randint(1, 2)
+    for row in range(NUM_OF_GENE_ROWS):
 
-        if choice == 1:
-            gene = parent1.genome[i]
-            child_genes.append(gene)
-        else:
-            gene = parent2.genome[i]
-            child_genes.append(gene)
+        for column in range(NUM_OF_GENE_COLUMNS):
+
+            choice = random.randint(1, 2)
+
+            if choice == 1:
+                child_genes[row][column] = parent1.genome[row][column]
+
+            else:
+                child_genes[row][column] = parent2.genome[row][column]
 
     return child_genes
 
@@ -103,7 +151,7 @@ def tournament_selection(cars, tournament_selection_constant) -> Car:
     return king
 
 
-def genetic_algorithm_tournament_selection(cars) -> list:
+def genetic_algorithm_tournament_selection(cars) -> np.ndarray:
     parent1 = tournament_selection(cars, TOURNAMENT_SIZE)
     parent2 = tournament_selection(cars, TOURNAMENT_SIZE)
 
@@ -114,13 +162,44 @@ def genetic_algorithm_tournament_selection(cars) -> list:
 
     return child_genes
 
+def draw_scene() -> None:
+
+    SCREEN.blit(background, (0, 0))
+
+    for car in cars:
+
+        if car.alive:
+            car.draw(SCREEN)
+
+    pygame.display.flip()
+
+def create_next_generation() -> list:
+    new_cars = []
+
+    for _ in range(NUMBER_OF_ENTITIES):
+        child_genome = genetic_algorithm_tournament_selection(cars)
+        new_car = Car(child_genome)
+        new_cars.append(new_car)
+
+    return new_cars
+    
+
+""" def mutation():
+    pass """
+
+def generation_finished() -> bool:
+    for car in cars:
+        if car.alive == True:
+            return False
+    return True
+
 
 def main():
-    global x, y, angle
+    global cars
     clock = pygame.time.Clock()
     run = True
 
-    first_creation(NUMBER_OF_ENTITIES, NUMBER_OF_GENES)
+    first_creation(NUMBER_OF_ENTITIES)
 
     while run:
         dt = clock.tick(FPS)/1000
@@ -129,25 +208,12 @@ def main():
             if event.type == pygame.QUIT:
                 run = False
 
-        ## kiszámolja az autó pozícioját
-        ## returnolj x és y és angle
-        ##bemenet: érzékelő(0,1), gén(x-y között),MAX_SPEED??,TURN_SPEED??
-        #gén elérési utja: car.self.genome[i]0-15balkerék, 16-31jobb kerék
+        run_cars(dt)
 
-        #kerék_sebesség_változó = matrix_dot_product()
-        # Rotate the original car surface
-        rotated_car = pygame.transform.rotate(car_surface, -math.degrees(angle))
+        if generation_finished():
+            cars = create_next_generation()
 
-        # Put the center of the rotated car at x, y
-        rect = rotated_car.get_rect(center=(int(x), int(y)))
-
-        # Draw background
-        SCREEN.blit(background, (0, 0))
-        # Draw car
-        SCREEN.blit(rotated_car, rect)
-
-        # Show finished frame
-        pygame.display.flip()
+        draw_scene()
 
     pygame.quit()
 
