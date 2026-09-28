@@ -1,0 +1,20 @@
+[project]
+name = "genetic-algorithm"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Gálig Eszter", email = "galigeszti@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=2.5.3",
+    "pygame>=2.6.1",
+]
+
+[project.scripts]
+genetic-algorithm = "genetic_algorithm:main"
+
+[build-system]
+requires = ["uv_build>=0.12.7,<0.13.0"]
+build-backend = "uv_build"
