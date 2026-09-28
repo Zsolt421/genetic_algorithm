@@ -18,12 +18,53 @@ NUMBER_OF_ENTITIES = 100
 #NUMBER_OF_GENES = 32
 NUM_OF_GENE_ROWS = 2
 NUM_OF_GENE_COLUMNS = 16
-NUMBER_OF_SENSORS = 16
+NUM_OF_SENSORS_COLUMNS = 16
+NUM_OF_SENSORS_ROWS = 1
 GEN_MIN = 0
 GEN_MAX = 1
 TOURNAMENT_SIZE = 5
 MAX_SPEED = 150
 TURN_SPEED = 60
+
+CHECKPOINTS = [
+    pygame.Rect(305, 940, 30, 30),
+    pygame.Rect(230, 915, 30, 30),
+    pygame.Rect(165, 855, 30, 30),
+    pygame.Rect(115, 775, 30, 30),
+    pygame.Rect(100, 685, 30, 30),
+    pygame.Rect(115, 595, 30, 30),
+    pygame.Rect(160, 510, 30, 30),
+    pygame.Rect(210, 430, 30, 30),
+    pygame.Rect(240, 345, 30, 30),
+    pygame.Rect(250, 260, 30, 30),
+    pygame.Rect(305, 195, 30, 30),
+    pygame.Rect(395, 160, 30, 30),
+    pygame.Rect(505, 145, 30, 30),
+    pygame.Rect(625, 140, 30, 30),
+    pygame.Rect(745, 145, 30, 30),
+    pygame.Rect(860, 145, 30, 30),
+    pygame.Rect(965, 135, 30, 30),
+    pygame.Rect(1055, 113, 30, 30),
+    pygame.Rect(1135, 100, 30, 30),
+    pygame.Rect(1185, 120, 30, 30),
+    pygame.Rect(1145, 190, 30, 30),
+    pygame.Rect(1095, 255, 30, 30),
+    pygame.Rect(1105, 320, 30, 30),
+    pygame.Rect(1165, 370, 30, 30),
+    pygame.Rect(1245, 405, 30, 30),
+    pygame.Rect(1295, 485, 30, 30),
+    pygame.Rect(1315, 585, 30, 30),
+    pygame.Rect(1305, 690, 30, 30),
+    pygame.Rect(1280, 785, 30, 30),
+    pygame.Rect(1225, 860, 30, 30),
+    pygame.Rect(1145, 900, 30, 30),
+    pygame.Rect(1055, 910, 30, 30),
+    pygame.Rect(950, 905, 30, 30),
+    pygame.Rect(845, 890, 30, 30),
+    pygame.Rect(740, 895, 30, 30),
+    pygame.Rect(635, 925, 30, 30),
+    pygame.Rect(530, 955, 30, 30),
+    pygame.Rect(415, 970, 30, 30),]
 
 
 
@@ -72,17 +113,36 @@ class Car:
     def read_sensors(self):
         pass
 
-    def calculate_controls(self):
+    def calculate_controls(self, sensor_values): 
         # A szenzorértékek és a genom alapján kiszámolja,
         # hogyan mozogjon az autó.
-        return
+        sensors_vector = np.array(sensor_values)
+        output = np.dot(self.genome, sensors_vector)
 
-    def move(self, dt):
+        right_wheel_acceleration = output[0]
+        left_wheel_acceleration = output[1]
+
+        return right_wheel_acceleration, left_wheel_acceleration
+
+    def move(self, dt, right_wheel_acceleration, left_wheel_acceleration, WHEEL_DISTANCE):
         # Frissíti az autó pozícióját és irányát az eltelt idő alapján.
-          
-        pass
+        right_wheel_speed = right_wheel_acceleration * dt
+        left_wheel_speed = left_wheel_acceleration * dt
+        forward_speed = (left_wheel_speed + right_wheel_speed) / 2
 
-    def check_death(self, dt):
+        delta_angle = (right_wheel_speed - left_wheel_speed) / WHEEL_DISTANCE * dt
+        self.angle += delta_angle
+
+        
+        #ezt az anglet a sensorokhoz is hozza kene biggyeszteni
+
+        #ide kell self. vagy nem? + egybe legyen egy nagy egyenlet vagy bontsam valtozokra
+        self.x += (np.cos(delta_angle) * forward_speed * dt)
+        self.y += (np.sin(delta_angle) * forward_speed * dt)
+
+        return right_wheel_speed, left_wheel_speed, self.angle, self.x, self.y
+
+    def check_if_on_road(self, dt):
         # Ellenőrzi, hogy az autó még az úton van-e.
         # Ha lement róla, alive = False.
         color = background.get_at((int(self.x), int(self.y)))
