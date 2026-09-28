@@ -1,6 +1,7 @@
 import pygame
 import math
 import os
+import numpy as np
 
 pygame.init()
 
@@ -39,6 +40,7 @@ sensor_2 = 10
 sensor_3 = -1 * sensor_1
 sensor_4 = -1 * sensor_2
 SENSOR_ANGLES = [sensor_1, sensor_2, sensor_3, sensor_4]
+SENSOR_ANGLES_ARRAY = np.array(SENSOR_ANGLES)
 
 # Távolságok az autó előtt
 sensor_dist = 20
@@ -113,20 +115,11 @@ def read_sensors(x, y, angle):
 
         for relative_angle in SENSOR_ANGLES:
 
-            sensor_angle = (
-                angle
-                + math.radians(relative_angle)
-            )
+            sensor_angle = (angle+ math.radians(relative_angle))
 
-            sensor_x = (
-                origin_x
-                + math.cos(sensor_angle) * distance
-            )
+            sensor_x = (origin_x+ math.cos(sensor_angle) * distance)
 
-            sensor_y = (
-                origin_y
-                + math.sin(sensor_angle) * distance
-            )
+            sensor_y = (origin_y+ math.sin(sensor_angle) * distance)
 
             if is_off_road(sensor_x, sensor_y):
                 value = 1
@@ -135,13 +128,7 @@ def read_sensors(x, y, angle):
 
             sensor_values.append(value)
 
-            sensor_points.append(
-                (
-                    sensor_x,
-                    sensor_y,
-                    value
-                )
-            )
+            sensor_points.append((sensor_x, sensor_y, value))
 
     return sensor_values, sensor_points, origin_x, origin_y
 
@@ -186,14 +173,6 @@ while running:
     # -------------------------
     # MOZGÁS
     # -------------------------
-
-    speed = (
-        left_speed + right_speed
-    ) / 2
-
-    angular_speed = (
-        left_speed - right_speed
-    ) / wheel_distance
 
     angle += angular_speed * dt
 
