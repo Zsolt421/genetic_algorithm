@@ -10,21 +10,44 @@ pygame.init()
 # VARIABLE DEFINITION
 # -------------------------
 
-WIDTH = 1000
-HEIGHT = 700
+WIDTH = 1448
+HEIGHT = 1086
 SCREEN = pygame.display.set_mode((WIDTH, HEIGHT))
-FPS = 60
+FPS = 30
 NUMBER_OF_ENTITIES = 100
 #NUMBER_OF_GENES = 32
 NUM_OF_GENE_ROWS = 2
 NUM_OF_GENE_COLUMNS = 16
-NUM_OF_SENSORS_COLUMNS = 16
-NUM_OF_SENSORS_ROWS = 1
+#NUM_OF_SENSORS_COLUMNS = 16
+#NUM_OF_SENSORS_ROWS = 1
 GEN_MIN = 0
 GEN_MAX = 1
 TOURNAMENT_SIZE = 5
-MAX_SPEED = 150
+#MAX_SPEED = 150
 TURN_SPEED = 60
+
+# -------------------------
+# SENSOR VALUES
+# -------------------------
+
+SENSOR_ORIGIN_OFFSET = 25
+# Negatív = balra
+# Pozitív = jobbra
+sensor_1 = 30
+sensor_2 = 15
+sensor_3 = -1 * sensor_2
+sensor_4 = -1 * sensor_1
+SENSOR_ANGLES = [sensor_1, sensor_2, sensor_3, sensor_4]
+
+# Távolságok az autó előtt
+sensor_dist = 20
+SENSOR_DISTANCES = [sensor_dist, 2 * sensor_dist, 3 * sensor_dist, 4 * sensor_dist]
+
+SENSOR_RADIUS = 3
+
+# Ennyivel induljon az érzékelés
+# az autó középpontja előtt
+SENSOR_ORIGIN_OFFSET = 25
 
 CHECKPOINTS = [
     pygame.Rect(305, 940, 30, 30),
@@ -86,10 +109,10 @@ background = pygame.transform.scale(background, (WIDTH, HEIGHT))
 # CAR STARTING SETTINGS
 # -------------------------
 
-STARTING_X = 265
-STARTING_Y = 627
+STARTING_X = 384
+STARTING_Y = 973
 STARTING_ANGLE = math.radians(-166)
-wheel_distance = 40
+WHEEL_DISTANCE = 40
 car_length = 50
 car_width = 30
 car_surface = pygame.Surface((car_length, car_width), pygame.SRCALPHA)
@@ -102,19 +125,51 @@ class Car:
         self.x = STARTING_X
         self.y = STARTING_Y
         self.angle = STARTING_ANGLE
-        self.rect = pygame.Rect(0, 0, car_length, car_width)
-        self.rect.center = (round(self.x), round(self.y))
-        self.speed = MAX_SPEED
+        self.rect = pygame.Rect(0, 0, car_length, car_width)#
+        self.rect.center = (round(self.x), round(self.y))#
+        self.left_wheel_speed = 0
+        self.right_wheel_speed = 0
+        #self.speed = MAX_SPEED
         self.alive = True
         self.fitness = 0
         self.genome = genome
         self.checkpoint_index = 0
         self.alive_time = 0
 
-    def read_sensors(self):
-        pass
+    def read_sensors(self) -> list :
 
-    def calculate_controls(self, sensor_values): 
+        sensor_values = []
+        # érzékelők indulópontja: az autó eleje
+        
+        origin_x = self.x + math.cos(self.angle) * SENSOR_ORIGIN_OFFSET
+        origin_y = self.y + math.sin(self.angle) * SENSOR_ORIGIN_OFFSET
+
+        for distance in SENSOR_DISTANCES:
+
+            for relative_angle in SENSOR_ANGLES:
+
+                sensor_angle = (
+                    self.angle + math.radians(relative_angle)
+                )
+
+                sensor_x = (
+                    origin_x + math.cos(sensor_angle) * distance
+                )
+
+                sensor_y = (
+                    origin_y + math.sin(sensor_angle) * distance
+                )
+
+                if check_if_on_road(sensor_x, sensor_y):
+                    value = 0 # ha fű
+                else:
+                    value = 1 # ha út
+                    
+                sensor_values.append(value)
+
+        return sensor_values
+
+    def calculate_controls(self, sensor_values) -> tuple[float, float]: 
         # A szenzorértékek és a genom alapján kiszámolja,
         # hogyan mozogjon az autó.
         sensors_vector = np.array(sensor_values)
@@ -125,41 +180,25 @@ class Car:
 
         return right_wheel_acceleration, left_wheel_acceleration
 
-    def move(self, dt, right_wheel_acceleration, left_wheel_acceleration, WHEEL_DISTANCE, angular_velocity, ):
+    def move(self, dt, right_wheel_acceleration, left_wheel_acceleration, WHEEL_DISTANCE) -> None:
         # Frissíti az autó pozícióját és irányát az eltelt idő alapján.
-        right_wheel_speed = right_wheel_acceleration * dt
-        left_wheel_speed = left_wheel_acceleration * dt
-        forward_speed = (left_wheel_speed + right_wheel_speed) / 2
-        angular_velocity = (right_wheel_speed - left_wheel_speed) / WHEEL_DISTANCE
+        self.right_wheel_speed += right_wheel_acceleration * dt
+        self.left_wheel_speed += left_wheel_acceleration * dt
+        forward_speed = (self.left_wheel_speed + self.right_wheel_speed) / 2
 
-        delta_angle = angular_velocity * dt
+        delta_angle = (self.left_wheel_speed - self.right_wheel_speed) / WHEEL_DISTANCE * dt
         self.angle += delta_angle
 
-    
-        self.x += (np.cos(delta_angle) * forward_speed * dt)
-        self.y += (np.sin(delta_angle) * forward_speed * dt)
+
+        #ide kell self. vagy nem? + egybe legyen egy nagy egyenlet vagy bontsam valtozokra
+        self.x += (np.cos(self.angle) * forward_speed * dt)
+        self.y += (np.sin(self.angle) * forward_speed * dt)
         self.rect.center = (round(self.x), round(self.y))
 
-
-
-    def check_if_on_road(self, dt):
-        # Ellenőrzi, hogy az autó még az úton van-e.
-        # Ha lement róla, alive = False.
-        color = background.get_at((int(self.x), int(self.y)))
-
-        r = color.r
-        g = color.g
-        b = color.b
-
-        if g > r + 30 and g > b + 30:
-            return True
-
-        return False
+        return None
 
     
-    def check_checkpoint(self, CHECKPOINTS):
-        if not self.alive:
-            return
+    def check_checkpoint(self) -> None:
         # Ellenőrzi, hogy az autó elérte-e a következő checkpointot.
         if self.checkpoint_index < len(CHECKPOINTS):
             current_target = CHECKPOINTS[self.checkpoint_index]
@@ -168,26 +207,25 @@ class Car:
             if self.rect.colliderect(current_target):
                 self.checkpoint_index += 1
 
-
-
-    def calculate_fitness(self, CHECKPOINTS):
+    def calculate_fitness(self) -> None:
 
         if self.checkpoint_index < len(CHECKPOINTS):
             target = CHECKPOINTS[self.checkpoint_index]
 
             distance = math.hypot(self.x - target.centerx, self.y - target.centery)
             self.fitness = self.checkpoint_index * 1000 - distance
-            
+
         else:
             self.fitness = len(CHECKPOINTS) * 1000
 
+    def draw(self, screen) -> None:
+        rotated_car = pygame.transform.rotate(car_surface,-math.degrees(self.angle))
+        rect = rotated_car.get_rect(center=(int(self.x), int(self.y)))
+        screen.blit(rotated_car, rect)
 
-
-
-    def draw(self, screen):
-        rotated_car = pygame.transform.rotate(car_surface, -math.degrees(self.angle))
-        rotated_rect = rotated_car.get_rect(center=self.rect.center)
-        screen.blit(rotated_car, rotated_rect)
+# -------------------------
+# Run Car
+# -------------------------
 
 def run_cars(dt) -> None:
     for car in cars:
@@ -195,14 +233,29 @@ def run_cars(dt) -> None:
             
             car.alive_time += dt
 
-            Car.read_sensor()
 
-            ##
+            right_wheel_acceleration, left_wheel_acceleration = car.calculate_controls(car.read_sensors())
+            car.move(dt, right_wheel_acceleration, left_wheel_acceleration, WHEEL_DISTANCE)
 
-            Car.check_death(dt)
-            Car.check_checkpoint()
-            Car.calculate_fitness()
-            Car.draw(SCREEN)
+            car.alive = check_if_on_road(car.x, car.y)
+            
+            if car.alive == True: car.check_checkpoint()
+            else: car.calculate_fitness()
+
+
+def check_if_on_road(x, y) -> bool:
+    if x < 0 or x >= WIDTH or y < 0 or y >= HEIGHT:
+        return False
+    color = background.get_at((int(x), int(y)))
+
+    r = color.r
+    g = color.g
+    b = color.b
+
+    if g > r + 30 and g > b + 30:
+        return False   #grass
+
+    return True   #road
 
 def first_creation(NUMBER_OF_ENTITIES) -> None:
 
@@ -298,6 +351,7 @@ def main():
         run_cars(dt)
 
         if generation_finished():
+            generation_counter += 1
             cars = create_next_generation()
 
         draw_scene()
