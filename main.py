@@ -23,27 +23,32 @@ NUM_OF_GENE_COLUMNS = 16
 GEN_MIN = -1
 GEN_MAX = 1
 TOURNAMENT_SIZE = 5
-MAX_SPEED = 150
 TARGET_AVERAGE_SPEED = 100
 SPEED_CONTROL_GAIN = 2.0
+MAX_SPEED = 150
 TURN_SPEED = 60
-TIMEOUT = 25
 CHECKPOINT_GATE_SEARCH_LIMIT = 220
+TIMEOUT = 25
+DRAW = False
+
+GEN_MEAN = 0
+GEN_STD = 0.5
 
 # -------------------------
 # SENSOR VALUES
 # -------------------------
 
+SENSOR_ORIGIN_OFFSET = 25
 # Negatív = balra
 # Pozitív = jobbra
-sensor_1 = 30
-sensor_2 = 15
+sensor_1 = 45
+sensor_2 = 20
 sensor_3 = -1 * sensor_2
 sensor_4 = -1 * sensor_1
 SENSOR_ANGLES = [sensor_1, sensor_2, sensor_3, sensor_4]
 
 # Távolságok az autó előtt
-sensor_dist = 20
+sensor_dist = 50
 SENSOR_DISTANCES = [sensor_dist, 2 * sensor_dist, 3 * sensor_dist, 4 * sensor_dist]
 
 SENSOR_RADIUS = 3
@@ -53,6 +58,11 @@ SENSOR_RADIUS = 3
 SENSOR_ORIGIN_OFFSET = 25
 
 CHECKPOINT_CENTERS = [
+    (860, 905),
+    (755, 910),
+    (650, 940),
+    (545, 970),
+    (430, 985),
     (320, 955),
     (245, 930),
     (180, 870),
@@ -86,11 +96,8 @@ CHECKPOINT_CENTERS = [
     (1160, 915),
     (1070, 925),
     (965, 920),
-    (860, 905),
-    (755, 910),
-    (650, 940),
-    (545, 970),
-    (430, 985),
+
+
 ]
 
 
@@ -113,9 +120,11 @@ background = pygame.transform.scale(background, (WIDTH, HEIGHT))
 # CAR STARTING SETTINGS
 # -------------------------
 
-STARTING_X = 384
-STARTING_Y = 973
-STARTING_ANGLE = math.radians(-166)
+#STARTING_X = 384
+#STARTING_Y = 973
+STARTING_X = 915
+STARTING_Y = 915
+STARTING_ANGLE = math.radians(-190)
 WHEEL_DISTANCE = 40
 car_length = 50
 car_width = 30
@@ -133,24 +142,27 @@ class Car:
         self.rect.center = (round(self.x), round(self.y))#
         self.left_wheel_speed = 0
         self.right_wheel_speed = 0
-        #self.speed = MAX_SPEED
         self.alive = True
         self.fitness = 0
         self.genome = genome
         self.checkpoint_index = 0
         self.alive_time = 0
+
         self.previous_x = self.x
         self.previous_y = self.y
 
-    def read_sensors(self) -> tuple[np.ndarray, list[float]]:
+        self.sensor_values = np.empty((NUM_OF_GENE_COLUMNS, 3))
+        self.sensor_origin = []
 
-        sensor_values = np.empty((NUM_OF_GENE_COLUMNS, 3))
+
+    def read_sensors(self) -> None:
+
 
         # érzékelők indulópontja: az autó eleje
         
         origin_x = self.x + math.cos(self.angle) * SENSOR_ORIGIN_OFFSET
         origin_y = self.y + math.sin(self.angle) * SENSOR_ORIGIN_OFFSET
-        sensor_origin = [origin_x, origin_y]
+        self.sensor_origin = [origin_x, origin_y]
      
         for distance_index, distance in enumerate(SENSOR_DISTANCES):
 
@@ -175,17 +187,18 @@ class Car:
                     
 
                 i = distance_index * len(SENSOR_ANGLES) + angle_index
-                sensor_values[i, 0] = value
-                sensor_values[i, 1] = sensor_x
-                sensor_values[i, 2] = sensor_y
+                self.sensor_values[i, 0] = value
+                self.sensor_values[i, 1] = sensor_x
+                self.sensor_values[i, 2] = sensor_y
 
-        return sensor_values, sensor_origin
 
-    def calculate_controls(self, sensor_values) -> tuple[float, float]: 
+        return None
+
+    def calculate_controls(self) -> tuple[float, float]: 
         # A szenzorértékek és a genom alapján kiszámolja,
         # hogyan mozogjon az autó.
         #sensors_vector = np.array(sensor_values)
-        output = np.dot(self.genome, sensor_values[:, 0])
+        output = np.dot(self.genome, self.sensor_values[:, 0])
 
         right_wheel_acceleration = output[0]
         left_wheel_acceleration = output[1]
@@ -193,7 +206,6 @@ class Car:
         return right_wheel_acceleration, left_wheel_acceleration
 
     def move(self, dt, right_wheel_acceleration, left_wheel_acceleration, WHEEL_DISTANCE) -> None:
-        # Frissíti az autó pozícióját és irányát az eltelt idő alapján.
         self.previous_x = self.x
         self.previous_y = self.y
         forward_speed = (self.left_wheel_speed + self.right_wheel_speed) / 2  #checks the forward speed
@@ -213,15 +225,11 @@ class Car:
         differential_speed = np.clip(differential_speed, -max_differential_speed, max_differential_speed) #difference of the two wheels' speed.
         self.right_wheel_speed = forward_speed + differential_speed
         self.left_wheel_speed = forward_speed - differential_speed
-
         delta_angle = (self.left_wheel_speed - self.right_wheel_speed) / WHEEL_DISTANCE * dt
         self.angle += delta_angle
 
-
         self.x += (np.cos(self.angle) * forward_speed * dt)
         self.y += (np.sin(self.angle) * forward_speed * dt)
-
-        #? lehet enelkul is mukodik?
         self.rect.center = (round(self.x), round(self.y))
 
         return None
@@ -229,16 +237,11 @@ class Car:
     
     def check_checkpoint(self) -> None:
         if self.checkpoint_index < len(CHECKPOINT_CENTERS):
-            if checkpoint_gate_was_crossed(
-                self.previous_x,
-                self.previous_y,
-                self.x,
-                self.y,
-                self.checkpoint_index,
-            ):
+            if self.checkpoint_gate_was_crossed():
                 self.checkpoint_index += 1
 
     def calculate_fitness(self) -> None:
+
         max_distance = math.hypot(WIDTH, HEIGHT)
         checkpoint_reward = max_distance + 1
 
@@ -248,35 +251,59 @@ class Car:
             progress_reward = max_distance - distance
             self.fitness = self.checkpoint_index * checkpoint_reward + progress_reward
         
+
         else:
-            self.fitness = (
-                len(CHECKPOINT_CENTERS) * checkpoint_reward
-                + 1 / (1 + self.alive_time)
-            )
+            self.fitness = (len(CHECKPOINT_CENTERS) * checkpoint_reward + 1 / (1 + self.alive_time))
+
+    def checkpoint_gate_was_crossed(self) -> bool:
+        gate_start, gate_end = CHECKPOINT_GATES[self.checkpoint_index]
+
+        #calculates how far did the car get from previous to current position (from previous to self.x and self.y)
+        move_x, move_y = self.x - self.previous_x, self.y - self.previous_y
+        gate_x, gate_y = gate_end[0] - gate_start[0], gate_end[1] - gate_start[1]
+        
+        denominator = move_x * gate_y - move_y * gate_x
+        if denominator == 0:
+            return False
+
+        offset_x, offset_y = gate_start[0] - self.previous_x, gate_start[1] - self.previous_y
+
+        move_fraction = (offset_x * gate_y - offset_y * gate_x) / denominator
+        gate_fraction = (offset_x * move_y - offset_y * move_x) / denominator
+
+        return 0 <= move_fraction <= 1 and 0 <= gate_fraction <= 1
+
+
 
     def draw(self, screen) -> None:
         rotated_car = pygame.transform.rotate(car_surface,-math.degrees(self.angle))
         rect = rotated_car.get_rect(center=(int(self.x), int(self.y)))
+
+        if DRAW == True : self.draw_sensors()
+
         screen.blit(rotated_car, rect)
+        
 
-    @staticmethod
-    def draw_sensors(sensor_values, sensor_origin):
-        for value, sensor_x, sensor_y in sensor_values:
+    def draw_sensors(self) -> None:
+        if self.alive == True:       ##c&&
+            for value, sensor_x, sensor_y in self.sensor_values:
 
-            # A vonal csak vizualizáció
-            pygame.draw.line(SCREEN,(100, 100, 100),(sensor_origin[0], sensor_origin[1]),(sensor_x, sensor_y),1)
+                # A vonal csak vizualizáció
+                pygame.draw.line(SCREEN,(100, 100, 100),(self.sensor_origin[0], self.sensor_origin[1]),(sensor_x, sensor_y),1)
 
-            # 0 = fű -> zöld pont
-            # 1 = út -> piros pont
+                # 0 = grass -> red point
+                # 1 = road  -> green point
 
-            if value == 0:
-                sensor_color = (255, 0, 0)
-            else:
-                sensor_color = (0, 255, 0)
+                if value == 0:
+                    sensor_color = (255, 0, 0)
+                else:
+                    sensor_color = (0, 255, 0)
 
-            pygame.draw.circle(
-                SCREEN,sensor_color,(int(sensor_x), int(sensor_y)),SENSOR_RADIUS
-            )
+                pygame.draw.circle(SCREEN,sensor_color,(int(sensor_x), int(sensor_y)),SENSOR_RADIUS)
+
+            return None
+
+
 
 # -------------------------
 # Run Car
@@ -284,24 +311,20 @@ class Car:
 
 def run_cars(dt) -> None:
     for car in cars:
-        if car.alive:
+        if car.alive == True:
+            
             car.alive_time += dt
 
-            sensor_values, sensor_origin = car.read_sensors()
+            car.read_sensors()
 
-            right_wheel_acceleration, left_wheel_acceleration = car.calculate_controls(sensor_values)
+            right_wheel_acceleration, left_wheel_acceleration = car.calculate_controls()
             car.move(dt, right_wheel_acceleration, left_wheel_acceleration, WHEEL_DISTANCE)
-            car.draw_sensors(sensor_values, sensor_origin)
 
-            on_road = check_if_on_road(car.x, car.y)
-            if on_road:
-                car.check_checkpoint()
-
-            if (
-                not on_road
-                or car.alive_time >= TIMEOUT
-                or car.checkpoint_index >= len(CHECKPOINT_CENTERS)
-            ):
+            car.check_checkpoint()
+            
+            if check_if_on_road(car.x, car.y) and car.alive_time < TIMEOUT and car.checkpoint_index < len(CHECKPOINT_CENTERS):
+                car.alive = True
+            else: 
                 car.alive = False
                 car.calculate_fitness()
 
@@ -319,6 +342,7 @@ def check_if_on_road(x, y) -> bool:
         return False   # grass
 
     return True   # road
+
 
 
 def build_checkpoint_gates() -> list[tuple[tuple[float, float], tuple[float, float]]]:
@@ -363,31 +387,16 @@ def build_checkpoint_gates() -> list[tuple[tuple[float, float], tuple[float, flo
     return gates
 
 
-CHECKPOINT_GATES = build_checkpoint_gates()
+CHECKPOINT_GATES = build_checkpoint_gates()    
 
 
-def checkpoint_gate_was_crossed(self) -> bool:
-    gate_start, gate_end = CHECKPOINT_GATES[self.checkpoint_index]
 
-    #calculates how far did the car get from previous to current position (from previous to self.x and self.y)
-    move_x, move_y = self.x - self.previous_x, self.y - self.previous_y
-    gate_x, gate_y = gate_end[0] - gate_start[0], gate_end[1] - gate_start[1]
-    
-    denominator = move_x * gate_y - move_y * gate_x
-    if denominator == 0:
-        return False
-
-    offset_x, offset_y = gate_start[0] - self.previous_x, gate_start[1] - self.previous_y
-
-    move_fraction = (offset_x * gate_y - offset_y * gate_x) / denominator
-    gate_fraction = (offset_x * move_y - offset_y * move_x) / denominator
-    return 0 <= move_fraction <= 1 and 0 <= gate_fraction <= 1
 
 
 def first_creation(NUMBER_OF_ENTITIES) -> None:
 
     for _ in range(NUMBER_OF_ENTITIES):
-        genome = np.random.normal(GEN_MIN, GEN_MAX,(NUM_OF_GENE_ROWS, NUM_OF_GENE_COLUMNS))
+        genome = np.random.uniform(GEN_MIN, GEN_MAX,(NUM_OF_GENE_ROWS, NUM_OF_GENE_COLUMNS))
         cars.append(Car(genome))
 
 def genome_crosser(parent1, parent2) -> list:
@@ -432,20 +441,18 @@ def genetic_algorithm_tournament_selection(cars) -> np.ndarray:
 def draw_scene() -> None:
 
     SCREEN.blit(background, (0, 0))
-
     for gate_start, gate_end in CHECKPOINT_GATES:
         pygame.draw.line(
             SCREEN,
             (255, 255, 0),
-            (round(gate_start[0]), round(gate_start[1])),
-            (round(gate_end[0]), round(gate_end[1])),
-            3,
-        )
+            (round(gate_start[0]), round(gate_start[1])), 
+            (round(gate_end[0]), round(gate_end[1])), 3)
 
     for car in cars:
 
         if car.alive:
             car.draw(SCREEN)
+
 
     pygame.display.flip()
 
@@ -456,6 +463,7 @@ def create_next_generation() -> list:
         child_genome = genetic_algorithm_tournament_selection(cars)
         new_car = Car(child_genome)
         new_cars.append(new_car)
+        print(new_car.genome)
 
     return new_cars
     
@@ -488,6 +496,7 @@ def main():
 
         if generation_finished():
             generation_counter += 1
+            pygame.display.set_caption(f"Iteration: {generation_counter}")
             cars = create_next_generation()
 
         draw_scene()
