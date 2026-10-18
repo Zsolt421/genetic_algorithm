@@ -29,7 +29,10 @@ MAX_SPEED = 150
 TURN_SPEED = 60
 CHECKPOINT_GATE_SEARCH_LIMIT = 220
 TIMEOUT = 25
+
 DRAW = False
+MUTATION = True
+MUTATION_CHANCE = 50
 
 GEN_MEAN = 0
 GEN_STD = 0.5
@@ -41,14 +44,14 @@ GEN_STD = 0.5
 SENSOR_ORIGIN_OFFSET = 25
 # Negatív = balra
 # Pozitív = jobbra
-sensor_1 = 45
+sensor_1 = 50
 sensor_2 = 20
 sensor_3 = -1 * sensor_2
 sensor_4 = -1 * sensor_1
 SENSOR_ANGLES = [sensor_1, sensor_2, sensor_3, sensor_4]
 
 # Távolságok az autó előtt
-sensor_dist = 50
+sensor_dist = 60
 SENSOR_DISTANCES = [sensor_dist, 2 * sensor_dist, 3 * sensor_dist, 4 * sensor_dist]
 
 SENSOR_RADIUS = 3
@@ -285,7 +288,9 @@ class Car:
         
 
     def draw_sensors(self) -> None:
-        if self.alive == True:       ##c&&
+        if len(self.sensor_origin) < 2:
+            return
+        if self.alive == True:       
             for value, sensor_x, sensor_y in self.sensor_values:
 
                 # A vonal csak vizualizáció
@@ -390,6 +395,20 @@ def build_checkpoint_gates() -> list[tuple[tuple[float, float], tuple[float, flo
 CHECKPOINT_GATES = build_checkpoint_gates()    
 
 
+def draw_scene() -> None:
+
+    SCREEN.blit(background, (0, 0))
+    for gate_start, gate_end in CHECKPOINT_GATES:
+        pygame.draw.line(
+            SCREEN,
+            (255, 255, 0),
+            (round(gate_start[0]), round(gate_start[1])), 
+            (round(gate_end[0]), round(gate_end[1])), 3)
+
+    for car in cars:
+
+        if car.alive:
+            car.draw(SCREEN)
 
 
 
@@ -399,20 +418,24 @@ def first_creation(NUMBER_OF_ENTITIES) -> None:
         genome = np.random.uniform(GEN_MIN, GEN_MAX,(NUM_OF_GENE_ROWS, NUM_OF_GENE_COLUMNS))
         cars.append(Car(genome))
 
-def genome_crosser(parent1, parent2) -> list:
+def genome_crosser(parent1, parent2) -> np.ndarray:
     child_genes = np.empty((NUM_OF_GENE_ROWS, NUM_OF_GENE_COLUMNS))
 
     for row in range(NUM_OF_GENE_ROWS):
 
         for column in range(NUM_OF_GENE_COLUMNS):
 
-            choice = random.randint(1, 2)
-
-            if choice == 1:
-                child_genes[row][column] = parent1.genome[row][column]
+            if MUTATION and random.randrange(MUTATION_CHANCE) == 0:
+                child_genes[row][column] = random.uniform(GEN_MIN, GEN_MAX)
 
             else:
-                child_genes[row][column] = parent2.genome[row][column]
+                choice = random.randint(1, 2)
+
+                if choice == 1:
+                    child_genes[row][column] = parent1.genome[row][column]
+
+                else:
+                    child_genes[row][column] = parent2.genome[row][column]
 
     return child_genes
 
@@ -438,20 +461,6 @@ def genetic_algorithm_tournament_selection(cars) -> np.ndarray:
 
     return child_genes
 
-def draw_scene() -> None:
-
-    SCREEN.blit(background, (0, 0))
-    for gate_start, gate_end in CHECKPOINT_GATES:
-        pygame.draw.line(
-            SCREEN,
-            (255, 255, 0),
-            (round(gate_start[0]), round(gate_start[1])), 
-            (round(gate_end[0]), round(gate_end[1])), 3)
-
-    for car in cars:
-
-        if car.alive:
-            car.draw(SCREEN)
 
 
     pygame.display.flip()
@@ -468,8 +477,6 @@ def create_next_generation() -> list:
     return new_cars
     
 
-""" def mutation():
-    pass """
 
 def generation_finished() -> bool:
     for car in cars:
@@ -494,12 +501,12 @@ def main():
 
         run_cars(dt)
 
+        draw_scene()
+
         if generation_finished():
             generation_counter += 1
             pygame.display.set_caption(f"Iteration: {generation_counter}")
             cars = create_next_generation()
-
-        draw_scene()
 
     pygame.quit()
 
