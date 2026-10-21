@@ -3,6 +3,7 @@ import math
 import os
 import random
 import numpy as np
+import renderer
 
 pygame.init()
 
@@ -17,7 +18,7 @@ WINDOW_HEIGHT = 675
 SCREEN = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
 GAME_SURFACE = pygame.Surface((WIDTH, HEIGHT))
 FPS = 30
-NUMBER_OF_ENTITIES = 100
+NUMBER_OF_ENTITIES = 200
 #NUMBER_OF_GENES = 32
 NUM_OF_GENE_ROWS = 2
 NUM_OF_GENE_COLUMNS = 16
@@ -33,11 +34,12 @@ GRASS_SPEED_MULTIPLIER = 0.4
 GRASS_PENALTY_PER_SECOND = 50.0
 TURN_SPEED = 60
 CHECKPOINT_GATE_SEARCH_LIMIT = 220
-TIMEOUT = 25
+TIMEOUT = 20
 
-DRAW = False
+DRAW = True
 MUTATION = True
-MUTATION_CHANCE = 50
+MUTATION_CHANCE = 70
+GRASS_ALLOWED = True
 
 GEN_MEAN = 0
 GEN_STD = 0.5
@@ -63,7 +65,7 @@ SENSOR_RADIUS = 3
 
 # Ennyivel induljon az érzékelés
 # az autó középpontja előtt
-SENSOR_ORIGIN_OFFSET = 25
+SENSOR_ORIGIN_OFFSET = 20
 
 CHECKPOINT_CENTERS = [
     (860, 905),
@@ -215,16 +217,18 @@ class Car:
 
     def move(self, dt, right_wheel_acceleration, left_wheel_acceleration, WHEEL_DISTANCE, on_road) -> None:
         # Frissíti az autó pozícióját és irányát az eltelt idő alapján.
-        self.previous_x = self.x
+        self.previous_x = self.x    
         self.previous_y = self.y
+
         speed_multiplier = 1.0 if on_road else GRASS_SPEED_MULTIPLIER
+
         target_speed = TARGET_AVERAGE_SPEED * speed_multiplier  # changes the speed limit whether it's on road on on grass
         speed_limit = MAX_SPEED * speed_multiplier
         forward_speed = (self.left_wheel_speed + self.right_wheel_speed) / 2  #checks the forward speed
         average_acceleration = (right_wheel_acceleration + left_wheel_acceleration) / 2  # acceleration based on the sensors
 
         #calculates how far the car's forward speed is from the target speed and corrects it.
-        speed_correction = (SPEED_CONTROL_GAIN * (target_speed - forward_speed)- average_acceleration)
+        speed_correction = (SPEED_CONTROL_GAIN * (target_speed - forward_speed) - average_acceleration)
 
 
         right_wheel_speed = (self.right_wheel_speed + (right_wheel_acceleration + speed_correction) * dt)
@@ -316,12 +320,7 @@ class Car:
                 1,
             )
             sensor_color = (255, 0, 0) if value == 0 else (0, 255, 0)
-            pygame.draw.circle(
-                GAME_SURFACE,
-                sensor_color,
-                (int(sensor_x), int(sensor_y)),
-                SENSOR_RADIUS,
-            )
+            pygame.draw.circle(GAME_SURFACE, sensor_color, (int(sensor_x), int(sensor_y)), SENSOR_RADIUS            )
 
 # -------------------------
 # Run Car
@@ -336,28 +335,28 @@ def run_cars(dt) -> None:
 
             right_wheel_acceleration, left_wheel_acceleration = car.calculate_controls()
             on_road_before_move = check_if_on_road(car.x, car.y)
-            car.move(
-                dt,
-                right_wheel_acceleration,
-                left_wheel_acceleration,
-                WHEEL_DISTANCE,
-                on_road_before_move,
-            )
+            car.move(dt, right_wheel_acceleration, left_wheel_acceleration, WHEEL_DISTANCE, on_road_before_move)
 
-            on_road = check_if_on_road(car.x, car.y)
-            in_bounds = 0 <= car.x < WIDTH and 0 <= car.y < HEIGHT
-            if on_road:
+            if GRASS_ALLOWED:
+                on_road = check_if_on_road(car.x, car.y)
+                in_bounds = 0 <= car.x < WIDTH and 0 <= car.y < HEIGHT
+                if on_road:
+                    car.check_checkpoint()
+                elif in_bounds:
+                    car.grass_time += dt
+
+                if not in_bounds or car.alive_time >= TIMEOUT or car.checkpoint_index >= len(CHECKPOINT_CENTERS):
+                    car.alive = False
+                    car.calculate_fitness()
+
+            else:
                 car.check_checkpoint()
-            elif in_bounds:
-                car.grass_time += dt
-
-            if (
-                not in_bounds
-                or car.alive_time >= TIMEOUT
-                or car.checkpoint_index >= len(CHECKPOINT_CENTERS)
-            ):
-                car.alive = False
-                car.calculate_fitness()
+            
+                if check_if_on_road(car.x, car.y) and car.alive_time < TIMEOUT and car.checkpoint_index < len(CHECKPOINT_CENTERS):
+                    car.alive = True
+                else: 
+                    car.alive = False
+                    car.calculate_fitness()
 
 
 def check_if_on_road(x, y) -> bool:
@@ -496,7 +495,7 @@ def create_next_generation() -> list:
         child_genome = genetic_algorithm_tournament_selection(cars)
         new_car = Car(child_genome)
         new_cars.append(new_car)
-        print(new_car.genome)
+        #print(new_car.genome)
 
     return new_cars
     
@@ -517,13 +516,14 @@ def main():
     first_creation(NUMBER_OF_ENTITIES)
 
     while run:
-        dt = clock.tick(FPS)/1000
+        dt = clock.tick(FPS)/100
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 run = False
 
-        run_cars(dt)
+        run_cars(0.1)
+        print(dt)
 
         draw_scene()
 
