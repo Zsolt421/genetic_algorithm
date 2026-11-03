@@ -1,20 +1,21 @@
-import argparse
-import csv
-import json
 import pygame
 import math
 import os
-from datetime import datetime
-from pathlib import Path
 import random
-import shutil
 import numpy as np
 import renderer
+
+import argparse
+import csv
+import json
+from datetime import datetime
+from pathlib import Path
+import shutil
 
 pygame.init()
 
 # -------------------------
-# VARIABLE DEFINITION
+# *VARIABLE DEFINITION
 # -------------------------
 
 WIDTH = 1448
@@ -24,34 +25,40 @@ WINDOW_HEIGHT = 675
 SCREEN = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
 GAME_SURFACE = pygame.Surface((WIDTH, HEIGHT))
 FPS = 30
-NUMBER_OF_ENTITIES = 200
-#NUMBER_OF_GENES = 32
-NUM_OF_GENE_ROWS = 2
+NUMBER_OF_ENTITIES = 100
+
+NUM_OF_GENE_ROWS = 3
 NUM_OF_GENE_COLUMNS = 16
-#NUM_OF_SENSORS_COLUMNS = 16
-#NUM_OF_SENSORS_ROWS = 1
+
 GEN_MIN = -1
 GEN_MAX = 1
+
 TOURNAMENT_SIZE = 5
-TARGET_AVERAGE_SPEED = 100
-SPEED_CONTROL_GAIN = 2.0
+#TARGET_AVERAGE_SPEED = 100
+#SPEED_CONTROL_GAIN = 2.0
 MAX_SPEED = 150
 GRASS_SPEED_MULTIPLIER = 0.4
 GRASS_PENALTY_PER_SECOND = 50.0
-TURN_SPEED = 60
+
 CHECKPOINT_GATE_SEARCH_LIMIT = 220
-TIMEOUT = 20
+
+
+# -------------------------
+# *Bools
+# -------------------------
 
 DRAW = True
 MUTATION = True
-MUTATION_CHANCE = 70
 GRASS_ALLOWED = True
+MUTATION_CHANCE = 70
+TIMEOUT = 25
+
 
 GEN_MEAN = 0
 GEN_STD = 0.5
 
 # -------------------------
-# SENSOR VALUES
+# *SENSOR VALUES
 # -------------------------
 
 SENSOR_ORIGIN_OFFSET = 25
@@ -64,8 +71,7 @@ sensor_4 = -1 * sensor_1
 SENSOR_ANGLES = [sensor_1, sensor_2, sensor_3, sensor_4]
 
 # Távolságok az autó előtt
-sensor_dist = 60
-SENSOR_DISTANCES = [sensor_dist, 2 * sensor_dist, 3 * sensor_dist, 4 * sensor_dist]
+
 
 SENSOR_RADIUS = 3
 
@@ -120,6 +126,8 @@ CHECKPOINT_CENTERS = [
 
 generation_counter = 1
 cars = []
+
+
 RESULTS_DIR = Path(__file__).resolve().parent / "results"
 SUMMARY_FIELDS = [
     "generation",
@@ -130,7 +138,7 @@ SUMMARY_FIELDS = [
 
 
 # -------------------------
-# PYGAME LOAD IN
+# *PYGAME LOAD IN
 # -------------------------
 
 pygame.display.set_caption(f"Iteration: {generation_counter}")
@@ -140,7 +148,7 @@ background = pygame.transform.scale(background, (WIDTH, HEIGHT))
 
 
 # -------------------------
-# CAR STARTING SETTINGS
+# *CAR STARTING SETTINGS
 # -------------------------
 
 #STARTING_X = 384
@@ -148,7 +156,7 @@ background = pygame.transform.scale(background, (WIDTH, HEIGHT))
 STARTING_X = 915
 STARTING_Y = 915
 STARTING_ANGLE = math.radians(-190)
-WHEEL_DISTANCE = 40
+WHEEL_DISTANCE = 0.1  #original 40
 car_length = 50
 car_width = 30
 car_surface = pygame.Surface((car_length, car_width), pygame.SRCALPHA)
@@ -168,6 +176,7 @@ class Car:
         self.alive = True
         self.fitness = 0
         self.genome = genome
+
         self.checkpoint_index = 0
         self.alive_time = 0
         self.grass_time = 0
@@ -180,16 +189,24 @@ class Car:
 
     def read_sensors(self) -> None:
 
+        sensord_1 = round(1.0 + self.genome[2][2] * 50)
+        sensor_distances = [sensord_1, 2 * sensord_1, 3 * sensord_1, 4 * sensord_1]
+
+        sensor_1 = round((1.0 + self.genome[2][0]) * 45)
+        sensor_2 = round(sensor_1 * self.genome[2][0])
+        sensor_3 = round((1.0 + self.genome[2][7]) * 45)
+        sensor_4 = round(sensor_1 * self.genome[2][8])
+        sensor_angles = [sensor_1, sensor_2, -1 * sensor_3, -1 * sensor_4]
 
         # érzékelők indulópontja: az autó eleje
         
         origin_x = self.x + math.cos(self.angle) * SENSOR_ORIGIN_OFFSET
         origin_y = self.y + math.sin(self.angle) * SENSOR_ORIGIN_OFFSET
         self.sensor_origin = [origin_x, origin_y]
-     
-        for distance_index, distance in enumerate(SENSOR_DISTANCES):
 
-            for angle_index, relative_angle in enumerate(SENSOR_ANGLES):
+        for distance_index, distance in enumerate(sensor_distances):
+
+            for angle_index, relative_angle in enumerate(sensor_angles):
 
                 sensor_angle = (
                     self.angle + math.radians(relative_angle)
@@ -221,7 +238,7 @@ class Car:
         # A szenzorértékek és a genom alapján kiszámolja,
         # hogyan mozogjon az autó.
         #sensors_vector = np.array(sensor_values)
-        output = np.dot(self.genome, self.sensor_values[:, 0])
+        output = np.dot(self.genome[:2], self.sensor_values[:, 0])
 
         right_wheel_acceleration = output[0]
         left_wheel_acceleration = output[1]
@@ -229,7 +246,23 @@ class Car:
         return right_wheel_acceleration, left_wheel_acceleration
 
     def move(self, dt, right_wheel_acceleration, left_wheel_acceleration, WHEEL_DISTANCE, on_road) -> None:
-        # Frissíti az autó pozícióját és irányát az eltelt idő alapján.
+        
+        self.angle += (right_wheel_acceleration - left_wheel_acceleration) * ((1.0 + self.genome[2][4])/10)
+
+        if not on_road and GRASS_ALLOWED:
+            speed_multiplier = GRASS_SPEED_MULTIPLIER
+        else: speed_multiplier = 1.0
+        speed_limit = ((1.5 + self.genome[2][5]) * 100) * speed_multiplier
+
+        self.x += (np.cos(self.angle) * speed_limit * dt)
+        self.y += (np.sin(self.angle) * speed_limit * dt)
+        self.rect.center = (round(self.x), round(self.y))
+
+        return None
+
+        
+
+        """     # Frissíti az autó pozícióját és irányát az eltelt idő alapján.
         self.previous_x = self.x    
         self.previous_y = self.y
 
@@ -259,9 +292,9 @@ class Car:
 
         self.x += (np.cos(self.angle) * forward_speed * dt)
         self.y += (np.sin(self.angle) * forward_speed * dt)
-        self.rect.center = (round(self.x), round(self.y))
+        self.rect.center = (round(self.x), round(self.y)) """
 
-        return None
+    
 
     
     def check_checkpoint(self) -> None:
@@ -330,13 +363,12 @@ class Car:
                 (100, 100, 100),
                 self.sensor_origin,
                 (sensor_x, sensor_y),
-                1,
-            )
+                1,)
             sensor_color = (255, 0, 0) if value == 0 else (0, 255, 0)
             pygame.draw.circle(GAME_SURFACE, sensor_color, (int(sensor_x), int(sensor_y)), SENSOR_RADIUS            )
 
 # -------------------------
-# Run Car
+# *Run Car
 # -------------------------
 
 def run_cars(dt) -> None:
@@ -457,6 +489,7 @@ def first_creation(NUMBER_OF_ENTITIES) -> None:
     for _ in range(NUMBER_OF_ENTITIES):
         genome = np.random.uniform(GEN_MIN, GEN_MAX,(NUM_OF_GENE_ROWS, NUM_OF_GENE_COLUMNS))
         cars.append(Car(genome))
+#!hh
 
 def genome_crosser(parent1, parent2) -> np.ndarray:
     child_genes = np.empty((NUM_OF_GENE_ROWS, NUM_OF_GENE_COLUMNS))
@@ -478,6 +511,7 @@ def genome_crosser(parent1, parent2) -> np.ndarray:
                     child_genes[row][column] = parent2.genome[row][column]
 
     return child_genes
+
 
 def tournament_selection(cars, tournament_selection_constant) -> Car:
     competitors = random.sample(cars, tournament_selection_constant)
@@ -511,7 +545,14 @@ def create_next_generation() -> list:
         #print(new_car.genome)
 
     return new_cars
+    
 
+
+def generation_finished() -> bool:
+    for car in cars:
+        if car.alive == True:
+            return False
+    return True
 
 def save_generation(cars: list[Car], generation_number: int, run_directory: Path) -> None:
     if not cars:
@@ -632,18 +673,13 @@ def parse_arguments() -> argparse.Namespace:
     return arguments
 
 
-def generation_finished() -> bool:
-    for car in cars:
-        if car.alive == True:
-            return False
-    return True
-
-
 def main():
     global cars, generation_counter
     arguments = parse_arguments()
+
     clock = pygame.time.Clock()
     run = True
+
 
     if arguments.resume_generation is None:
         run_directory = create_run_directory()
@@ -673,8 +709,9 @@ def main():
 
     pygame.display.set_caption(f"Iteration: {generation_counter}")
 
+
     while run:
-        dt = clock.tick(FPS)/100
+        dt = clock.tick(FPS)/1000
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
