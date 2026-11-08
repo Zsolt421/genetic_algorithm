@@ -8,6 +8,7 @@ import renderer
 import argparse
 import csv
 import json
+import time
 from datetime import datetime
 from pathlib import Path
 import shutil
@@ -131,9 +132,10 @@ cars = []
 RESULTS_DIR = Path(__file__).resolve().parent / "results"
 SUMMARY_FIELDS = [
     "generation",
+    "seed",
     "best_fitness",
     "average_fitness",
-    "best_checkpoint",
+    #"best_checkpoint",
 ]
 
 
@@ -308,6 +310,7 @@ class Car:
 
         full_distance = 0
         full_displacement = 0
+        displacement_timer = 0
 
         distance = np.sqrt(distance_x**2 + distance_y**2)
         full_distance += distance
@@ -420,7 +423,7 @@ def run_cars(dt) -> None:
 
                 if not in_bounds or car.alive_time >= TIMEOUT: #or car.checkpoint_index >= len(CHECKPOINT_CENTERS)""":
                     car.alive = False
-                    car.calculate_fitness()
+                    car.calculate_fitness(dt)
 
 """             else:
                 car.check_checkpoint()
@@ -583,7 +586,12 @@ def generation_finished() -> bool:
             return False
     return True
 
-def save_generation(cars: list[Car], generation_number: int, run_directory: Path) -> None:
+def save_generation(
+    cars: list[Car],
+    generation_number: int,
+    run_directory: Path,
+    seed: int | None,
+) -> None:
     if not cars:
         raise ValueError("Cannot save a generation without cars.")
 
@@ -593,19 +601,24 @@ def save_generation(cars: list[Car], generation_number: int, run_directory: Path
         "population_size": len(cars),
         "best_fitness": float(best_car.fitness),
         "average_fitness": float(np.mean([car.fitness for car in cars])),
-        "best_checkpoint": best_car.checkpoint_index,
+        #"best_checkpoint": best_car.checkpoint_index,
         "best_genome": best_car.genome.tolist(),
         "cars": [
             {
                 "genome": car.genome.tolist(),
                 "fitness": float(car.fitness),
-                "checkpoint_index": car.checkpoint_index,
+                #"checkpoint_index": car.checkpoint_index,
                 "alive_time": float(car.alive_time),
                 "grass_time": float(car.grass_time),
             }
             for car in cars
         ],
     }
+    if generation_number == 1:
+        if seed is None:
+            raise ValueError("Generation 1 must be saved with its random seed.")
+        generation_data["seed"] = seed
+
     generation_path = run_directory / f"generation_{generation_number:04}.json"
 
     with generation_path.open("x", encoding="utf-8") as generation_file:
@@ -623,7 +636,7 @@ def append_generation_summary(generation_data: dict, run_directory: Path) -> Non
         writer = csv.DictWriter(summary_file, fieldnames=SUMMARY_FIELDS)
         if not summary_exists:
             writer.writeheader()
-        writer.writerow({field: generation_data[field] for field in SUMMARY_FIELDS})
+        writer.writerow({field: generation_data.get(field, "") for field in SUMMARY_FIELDS})
 
 
 def load_generation(generation_number: int, run_directory: Path) -> list[Car]:
@@ -650,7 +663,7 @@ def load_generation(generation_number: int, run_directory: Path) -> list[Car]:
 
         car = Car(genome)
         car.fitness = float(saved_car["fitness"])
-        car.checkpoint_index = int(saved_car["checkpoint_index"])
+        #car.checkpoint_index = int(saved_car["checkpoint_index"])
         car.alive_time = float(saved_car["alive_time"])
         car.grass_time = float(saved_car["grass_time"])
         loaded_cars.append(car)
@@ -682,12 +695,17 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--resume-generation",
         type=int,
-        help="Continue evolving from this completed generation.",
+        help="Continue evolving from this saved generation.",
     )
     parser.add_argument(
         "--run-directory",
         type=Path,
         help="Existing results/run_... directory to load the saved generation from.",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        help="Random seed for a new run. Reuse a run's generation 1 seed to reproduce it.",
     )
     arguments = parser.parse_args()
 
@@ -696,6 +714,8 @@ def parse_arguments() -> argparse.Namespace:
             parser.error("--resume-generation must be at least 1.")
         if arguments.run_directory is None:
             parser.error("--run-directory is required when resuming.")
+        if arguments.seed is not None:
+            parser.error("--seed can only be used when starting a new run.")
     elif arguments.run_directory is not None:
         parser.error("--run-directory can only be used with --resume-generation.")
 
@@ -708,12 +728,9 @@ def main():
 
     clock = pygame.time.Clock()
     run = True
+    run_seed: int | None = None
 
-
-    if arguments.resume_generation is None:
-        run_directory = create_run_directory()
-        first_creation(NUMBER_OF_ENTITIES)
-    else:
+    if arguments.resume_generation is not None:
         source_directory = arguments.run_directory.resolve()
         if not source_directory.is_dir():
             raise FileNotFoundError(f"Results directory does not exist: {source_directory}")
@@ -735,6 +752,12 @@ def main():
             f"Continuing with generation {generation_counter} from "
             f"{source_generation_path}; new results will be saved to {run_directory}"
         )
+    else:
+        run_directory = create_run_directory()
+        run_seed = arguments.seed if arguments.seed is not None else time.time_ns()
+        random.seed(run_seed)
+        np.random.seed(run_seed % (2**32))
+        first_creation(NUMBER_OF_ENTITIES)
 
     pygame.display.set_caption(f"Iteration: {generation_counter}")
 
@@ -752,7 +775,7 @@ def main():
         draw_scene()
 
         if generation_finished():
-            save_generation(cars, generation_counter, run_directory)
+            save_generation(cars, generation_counter, run_directory, run_seed)
             generation_counter += 1
             pygame.display.set_caption(f"Iteration: {generation_counter}")
             cars = create_next_generation()
