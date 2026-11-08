@@ -176,12 +176,12 @@ class Car:
         self.alive = True
         self.fitness = 0
         self.genome = genome
-
-        self.checkpoint_index = 0
+        #self.checkpoint_index = 0
         self.alive_time = 0
         self.grass_time = 0
         self.previous_x = self.x
         self.previous_y = self.y
+        
 
         self.sensor_values = np.empty((NUM_OF_GENE_COLUMNS, 3))
         self.sensor_origin = []
@@ -294,7 +294,7 @@ class Car:
         self.y += (np.sin(self.angle) * forward_speed * dt)
         self.rect.center = (round(self.x), round(self.y)) """
 
-    
+        return None
 
     
     def check_checkpoint(self) -> None:
@@ -302,9 +302,36 @@ class Car:
             if self.checkpoint_gate_was_crossed():
                 self.checkpoint_index += 1
 
-    def calculate_fitness(self) -> None:
+    def calculate_fitness(self, dt) -> None:
+        distance_x = self.x - self.previous_x
+        distance_y = self.y - self.previous_y
 
-        max_distance = math.hypot(WIDTH, HEIGHT)
+        full_distance = 0
+        full_displacement = 0
+
+        distance = np.sqrt(distance_x**2 + distance_y**2)
+        full_distance += distance
+
+        previous_displacement_x = self.x
+        previous_displacement_y = self.y
+
+        displacement_interval = 1.0
+        displacement_timer += dt
+
+        if displacement_timer >= displacement_interval:
+            x_displacement = self.x - previous_displacement_x
+            y_displacement = self.y - previous_displacement_y
+
+            full_displacement += np.sqrt(x_displacement**2 + y_displacement**2)
+
+            previous_displacement_x = self.x
+            previous_displacement_y = self.y
+
+            displacement_timer = 0.0
+
+        self.fitness += full_distance + full_displacement
+
+        """ max_distance = math.hypot(WIDTH, HEIGHT)
         checkpoint_reward = max_distance + 1 #could be any large number as long as it's bigger than max distance
 
         if self.checkpoint_index < len(CHECKPOINT_CENTERS):
@@ -323,9 +350,9 @@ class Car:
                 len(CHECKPOINT_CENTERS) * checkpoint_reward
                 + 1 / (1 + self.alive_time)
                 - self.grass_time * GRASS_PENALTY_PER_SECOND
-            )
+            ) """
 
-    def checkpoint_gate_was_crossed(self) -> bool:
+    """ def checkpoint_gate_was_crossed(self) -> bool:
         gate_start, gate_end = CHECKPOINT_GATES[self.checkpoint_index]
 
         #calculates how far did the car get from previous to current position (from previous to self.x and self.y)
@@ -342,7 +369,7 @@ class Car:
         gate_fraction = (offset_x * move_y - offset_y * move_x) / denominator
 
         return 0 <= move_fraction <= 1 and 0 <= gate_fraction <= 1
-
+ """
 
 
     def draw(self, screen) -> None:
@@ -385,16 +412,17 @@ def run_cars(dt) -> None:
             if GRASS_ALLOWED:
                 on_road = check_if_on_road(car.x, car.y)
                 in_bounds = 0 <= car.x < WIDTH and 0 <= car.y < HEIGHT
-                if on_road:
-                    car.check_checkpoint()
-                elif in_bounds:
+                if not on_road:
                     car.grass_time += dt
+                   # car.check_checkpoint()
+                #elif in_bounds:
+                    #car.grass_time += dt
 
-                if not in_bounds or car.alive_time >= TIMEOUT or car.checkpoint_index >= len(CHECKPOINT_CENTERS):
+                if not in_bounds or car.alive_time >= TIMEOUT: #or car.checkpoint_index >= len(CHECKPOINT_CENTERS)""":
                     car.alive = False
                     car.calculate_fitness()
 
-            else:
+"""             else:
                 car.check_checkpoint()
             
                 if check_if_on_road(car.x, car.y) and car.alive_time < TIMEOUT and car.checkpoint_index < len(CHECKPOINT_CENTERS):
@@ -402,7 +430,7 @@ def run_cars(dt) -> None:
                 else: 
                     car.alive = False
                     car.calculate_fitness()
-
+ """
 
 def check_if_on_road(x, y) -> bool:
     if x < 0 or x >= WIDTH or y < 0 or y >= HEIGHT:
@@ -420,7 +448,7 @@ def check_if_on_road(x, y) -> bool:
 
 
 
-def build_checkpoint_gates() -> list[tuple[tuple[float, float], tuple[float, float]]]:
+""" def build_checkpoint_gates() -> list[tuple[tuple[float, float], tuple[float, float]]]:
     #uses two checkpoints to define a normal vector between them, then searches for the road edges along that normal vector to define a gate.
 
     gates = []
@@ -462,18 +490,19 @@ def build_checkpoint_gates() -> list[tuple[tuple[float, float], tuple[float, flo
     return gates
 
 
-CHECKPOINT_GATES = build_checkpoint_gates()    
+CHECKPOINT_GATES = build_checkpoint_gates()     """
 
 
 def draw_scene() -> None:
 
     GAME_SURFACE.blit(background, (0, 0))
-    for gate_start, gate_end in CHECKPOINT_GATES:
+    """for gate_start, gate_end in CHECKPOINT_GATES:
         pygame.draw.line(
             GAME_SURFACE,
             (255, 255, 0),
             (round(gate_start[0]), round(gate_start[1])), 
-            (round(gate_end[0]), round(gate_end[1])), 3)
+            (round(gate_end[0]), round(gate_end[1])), 3)"""
+
 
     for car in cars:
 
