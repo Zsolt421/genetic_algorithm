@@ -1,14 +1,12 @@
 import pygame
 import math
 import os
-import random
 import numpy as np
 import renderer
 
 import argparse
 import csv
 import json
-import time
 from datetime import datetime
 from pathlib import Path
 import shutil
@@ -23,8 +21,8 @@ WIDTH = 1448
 HEIGHT = 1086
 WINDOW_WIDTH = 900
 WINDOW_HEIGHT = 675
-SCREEN = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
-GAME_SURFACE = pygame.Surface((WIDTH, HEIGHT))
+SCREEN = None
+GAME_SURFACE = None
 FPS = 30
 NUMBER_OF_ENTITIES = 100
 
@@ -42,6 +40,8 @@ GRASS_SPEED_MULTIPLIER = 0.4
 GRASS_PENALTY_PER_SECOND = 50.0
 
 CHECKPOINT_GATE_SEARCH_LIMIT = 220
+
+NUMBER_OF_ELITE = 10
 
 
 # -------------------------
@@ -132,7 +132,6 @@ cars = []
 RESULTS_DIR = Path(__file__).resolve().parent / "results"
 SUMMARY_FIELDS = [
     "generation",
-    "seed",
     "best_fitness",
     "average_fitness",
     #"best_checkpoint",
@@ -178,12 +177,12 @@ class Car:
         self.alive = True
         self.fitness = 0
         self.genome = genome
-        #self.checkpoint_index = 0
+
+        self.checkpoint_index = 0
         self.alive_time = 0
         self.grass_time = 0
         self.previous_x = self.x
         self.previous_y = self.y
-        
 
         self.sensor_values = np.empty((NUM_OF_GENE_COLUMNS, 3))
         self.sensor_origin = []
@@ -296,7 +295,7 @@ class Car:
         self.y += (np.sin(self.angle) * forward_speed * dt)
         self.rect.center = (round(self.x), round(self.y)) """
 
-        return None
+    
 
     
     def check_checkpoint(self) -> None:
@@ -304,7 +303,7 @@ class Car:
             if self.checkpoint_gate_was_crossed():
                 self.checkpoint_index += 1
 
-    def calculate_fitness(self, dt) -> None:
+    def calculate_fitness(self) -> None:
         distance_x = self.x - self.previous_x
         distance_y = self.y - self.previous_y
 
@@ -334,28 +333,8 @@ class Car:
 
         self.fitness += full_distance + full_displacement
 
-        """ max_distance = math.hypot(WIDTH, HEIGHT)
-        checkpoint_reward = max_distance + 1 #could be any large number as long as it's bigger than max distance
 
-        if self.checkpoint_index < len(CHECKPOINT_CENTERS):
-            target_x, target_y = CHECKPOINT_CENTERS[self.checkpoint_index]
-            distance = math.hypot(self.x - target_x, self.y - target_y)
-            progress_reward = max_distance - distance
-            self.fitness = (
-                self.checkpoint_index * checkpoint_reward
-                + progress_reward
-                - self.grass_time * GRASS_PENALTY_PER_SECOND
-            )
-        
-
-        else:
-            self.fitness = (
-                len(CHECKPOINT_CENTERS) * checkpoint_reward
-                + 1 / (1 + self.alive_time)
-                - self.grass_time * GRASS_PENALTY_PER_SECOND
-            ) """
-
-    """ def checkpoint_gate_was_crossed(self) -> bool:
+    def checkpoint_gate_was_crossed(self) -> bool:
         gate_start, gate_end = CHECKPOINT_GATES[self.checkpoint_index]
 
         #calculates how far did the car get from previous to current position (from previous to self.x and self.y)
@@ -372,7 +351,7 @@ class Car:
         gate_fraction = (offset_x * move_y - offset_y * move_x) / denominator
 
         return 0 <= move_fraction <= 1 and 0 <= gate_fraction <= 1
- """
+
 
 
     def draw(self, screen) -> None:
@@ -415,25 +394,25 @@ def run_cars(dt) -> None:
             if GRASS_ALLOWED:
                 on_road = check_if_on_road(car.x, car.y)
                 in_bounds = 0 <= car.x < WIDTH and 0 <= car.y < HEIGHT
-                if not on_road:
+                if on_road:
+                    pass
+                    #car.check_checkpoint()
+                elif in_bounds:
                     car.grass_time += dt
-                   # car.check_checkpoint()
-                #elif in_bounds:
-                    #car.grass_time += dt
 
-                if not in_bounds or car.alive_time >= TIMEOUT: #or car.checkpoint_index >= len(CHECKPOINT_CENTERS)""":
+                if not in_bounds or car.alive_time >= TIMEOUT:
                     car.alive = False
-                    car.calculate_fitness(dt)
+                    car.calculate_fitness()
 
-"""             else:
-                car.check_checkpoint()
+            else:
+                #car.check_checkpoint()
             
-                if check_if_on_road(car.x, car.y) and car.alive_time < TIMEOUT and car.checkpoint_index < len(CHECKPOINT_CENTERS):
+                if check_if_on_road(car.x, car.y) and car.alive_time < TIMEOUT:
                     car.alive = True
                 else: 
                     car.alive = False
                     car.calculate_fitness()
- """
+
 
 def check_if_on_road(x, y) -> bool:
     if x < 0 or x >= WIDTH or y < 0 or y >= HEIGHT:
@@ -451,7 +430,7 @@ def check_if_on_road(x, y) -> bool:
 
 
 
-""" def build_checkpoint_gates() -> list[tuple[tuple[float, float], tuple[float, float]]]:
+def build_checkpoint_gates() -> list[tuple[tuple[float, float], tuple[float, float]]]:
     #uses two checkpoints to define a normal vector between them, then searches for the road edges along that normal vector to define a gate.
 
     gates = []
@@ -493,18 +472,12 @@ def check_if_on_road(x, y) -> bool:
     return gates
 
 
-CHECKPOINT_GATES = build_checkpoint_gates()     """
+#CHECKPOINT_GATES = build_checkpoint_gates()    
 
 
 def draw_scene() -> None:
 
     GAME_SURFACE.blit(background, (0, 0))
-    """for gate_start, gate_end in CHECKPOINT_GATES:
-        pygame.draw.line(
-            GAME_SURFACE,
-            (255, 255, 0),
-            (round(gate_start[0]), round(gate_start[1])), 
-            (round(gate_end[0]), round(gate_end[1])), 3)"""
 
 
     for car in cars:
@@ -530,11 +503,11 @@ def genome_crosser(parent1, parent2) -> np.ndarray:
 
         for column in range(NUM_OF_GENE_COLUMNS):
 
-            if MUTATION and random.randrange(MUTATION_CHANCE) == 0:
-                child_genes[row][column] = random.uniform(GEN_MIN, GEN_MAX)
+            if MUTATION and np.random.randint(MUTATION_CHANCE) == 0:
+                child_genes[row][column] = np.random.uniform(GEN_MIN, GEN_MAX)
 
             else:
-                choice = random.randint(1, 2)
+                choice = np.random.randint(1, 3)
 
                 if choice == 1:
                     child_genes[row][column] = parent1.genome[row][column]
@@ -546,7 +519,9 @@ def genome_crosser(parent1, parent2) -> np.ndarray:
 
 
 def tournament_selection(cars, tournament_selection_constant) -> Car:
-    competitors = random.sample(cars, tournament_selection_constant)
+    indices = np.random.choice(len(cars), tournament_selection_constant, replace = False)
+
+    competitors = [cars[i] for i in indices]
     king = competitors[0]
 
     for k in range(1, tournament_selection_constant):
@@ -567,14 +542,27 @@ def genetic_algorithm_tournament_selection(cars) -> np.ndarray:
 
     return child_genes
 
+
+def top_selection(cars, n):
+    ranked_cars = sorted(
+        cars,
+        key=lambda car: car.fitness,
+        reverse=True
+    )
+    return ranked_cars[:n]
+
+
+
 def create_next_generation() -> list:
     new_cars = []
+    top = top_selection(cars, NUMBER_OF_ELITE)
+    for i in range(NUMBER_OF_ELITE):
+        new_cars.append(Car(top[i].genome.copy()))
 
-    for _ in range(NUMBER_OF_ENTITIES):
+    for _ in range(NUMBER_OF_ELITE, NUMBER_OF_ENTITIES):
         child_genome = genetic_algorithm_tournament_selection(cars)
         new_car = Car(child_genome)
         new_cars.append(new_car)
-        #print(new_car.genome)
 
     return new_cars
     
@@ -586,12 +574,7 @@ def generation_finished() -> bool:
             return False
     return True
 
-def save_generation(
-    cars: list[Car],
-    generation_number: int,
-    run_directory: Path,
-    seed: int | None,
-) -> None:
+def save_generation(cars: list[Car], generation_number: int, run_directory: Path) -> None:
     if not cars:
         raise ValueError("Cannot save a generation without cars.")
 
@@ -614,11 +597,6 @@ def save_generation(
             for car in cars
         ],
     }
-    if generation_number == 1:
-        if seed is None:
-            raise ValueError("Generation 1 must be saved with its random seed.")
-        generation_data["seed"] = seed
-
     generation_path = run_directory / f"generation_{generation_number:04}.json"
 
     with generation_path.open("x", encoding="utf-8") as generation_file:
@@ -636,7 +614,7 @@ def append_generation_summary(generation_data: dict, run_directory: Path) -> Non
         writer = csv.DictWriter(summary_file, fieldnames=SUMMARY_FIELDS)
         if not summary_exists:
             writer.writeheader()
-        writer.writerow({field: generation_data.get(field, "") for field in SUMMARY_FIELDS})
+        writer.writerow({field: generation_data[field] for field in SUMMARY_FIELDS})
 
 
 def load_generation(generation_number: int, run_directory: Path) -> list[Car]:
@@ -695,17 +673,12 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--resume-generation",
         type=int,
-        help="Continue evolving from this saved generation.",
+        help="Continue evolving from this completed generation.",
     )
     parser.add_argument(
         "--run-directory",
         type=Path,
         help="Existing results/run_... directory to load the saved generation from.",
-    )
-    parser.add_argument(
-        "--seed",
-        type=int,
-        help="Random seed for a new run. Reuse a run's generation 1 seed to reproduce it.",
     )
     arguments = parser.parse_args()
 
@@ -714,8 +687,6 @@ def parse_arguments() -> argparse.Namespace:
             parser.error("--resume-generation must be at least 1.")
         if arguments.run_directory is None:
             parser.error("--run-directory is required when resuming.")
-        if arguments.seed is not None:
-            parser.error("--seed can only be used when starting a new run.")
     elif arguments.run_directory is not None:
         parser.error("--run-directory can only be used with --resume-generation.")
 
@@ -723,14 +694,39 @@ def parse_arguments() -> argparse.Namespace:
 
 
 def main():
-    global cars, generation_counter
+    global cars, generation_counter, SCREEN, GAME_SURFACE
     arguments = parse_arguments()
+
+    seed_input = input("Enter a seed, or press Enter for a random seed: ")
+
+    if seed_input == "":
+        SEED = int(np.random.SeedSequence().generate_state(1)[0])
+    else:
+        SEED = int(seed_input)
+
+    np.random.seed(SEED)
+
+    print(f"Seed used: {SEED}")
+
+    # Only now start Pygame
+    pygame.init()
+
+    SCREEN = pygame.display.set_mode(
+        (WINDOW_WIDTH, WINDOW_HEIGHT)
+    )
+
+    GAME_SURFACE = pygame.Surface(
+        (WIDTH, HEIGHT)
+    )
 
     clock = pygame.time.Clock()
     run = True
-    run_seed: int | None = None
 
-    if arguments.resume_generation is not None:
+
+    if arguments.resume_generation is None:
+        run_directory = create_run_directory()
+        first_creation(NUMBER_OF_ENTITIES)
+    else:
         source_directory = arguments.run_directory.resolve()
         if not source_directory.is_dir():
             raise FileNotFoundError(f"Results directory does not exist: {source_directory}")
@@ -752,14 +748,11 @@ def main():
             f"Continuing with generation {generation_counter} from "
             f"{source_generation_path}; new results will be saved to {run_directory}"
         )
-    else:
-        run_directory = create_run_directory()
-        run_seed = arguments.seed if arguments.seed is not None else time.time_ns()
-        random.seed(run_seed)
-        np.random.seed(run_seed % (2**32))
-        first_creation(NUMBER_OF_ENTITIES)
+
 
     pygame.display.set_caption(f"Iteration: {generation_counter}")
+
+
 
 
     while run:
@@ -770,12 +763,12 @@ def main():
                 run = False
 
         run_cars(0.1)
-        print(dt)
+        #print(dt)
 
         draw_scene()
 
         if generation_finished():
-            save_generation(cars, generation_counter, run_directory, run_seed)
+            save_generation(cars, generation_counter, run_directory)
             generation_counter += 1
             pygame.display.set_caption(f"Iteration: {generation_counter}")
             cars = create_next_generation()
