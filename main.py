@@ -35,7 +35,7 @@ TOURNAMENT_SIZE = 5
 #TARGET_AVERAGE_SPEED = 100
 #SPEED_CONTROL_GAIN = 2.0
 MAX_SPEED = 150
-GRASS_SPEED_MULTIPLIER = 0.4
+GRASS_SPEED_MULTIPLIER = 0.1
 GRASS_PENALTY_PER_SECOND = 50.0
 
 NUMBER_OF_ELITE = 1
@@ -118,6 +118,10 @@ class Car:
         self.sensor_values = np.empty((NUM_OF_GENE_COLUMNS, 3))
         self.sensor_origin = []
 
+        self.previous_position_x = STARTING_X
+        self.previous_position_y = STARTING_Y
+        self.displacement_timer = 0
+
 
     def read_sensors(self) -> None:
 
@@ -199,29 +203,27 @@ class Car:
 
         full_distance = 0
         full_displacement = 0
-        displacement_timer = 0
 
         distance = np.sqrt(distance_x**2 + distance_y**2)
         full_distance += distance
 
-        previous_displacement_x = self.x
-        previous_displacement_y = self.y
-
         displacement_interval = 1.0
-        displacement_timer += dt
+        self.displacement_timer += dt
+        #print(self.displacement_timer, dt)
 
-        if displacement_timer >= displacement_interval:
-            x_displacement = self.x - previous_displacement_x
-            y_displacement = self.y - previous_displacement_y
+        if self.displacement_timer >= displacement_interval:
+            #print("hello")
+            x_displacement = self.x - self.previous_position_x
+            y_displacement = self.y - self.previous_position_y
 
             full_displacement += np.sqrt(x_displacement**2 + y_displacement**2)
 
-            previous_displacement_x = self.x
-            previous_displacement_y = self.y
+            self.previous_position_x = self.x
+            self.previous_position_y = self.y
 
-            displacement_timer = 0.0
+            self.displacement_timer = 0.0
 
-        self.fitness += full_distance + full_displacement
+        self.fitness += full_displacement
 
 
     def draw(self, screen) -> None:
@@ -256,6 +258,7 @@ def run_cars(dt) -> None:
             right_wheel_acceleration, left_wheel_acceleration = car.calculate_controls()
             on_road_before_move = check_if_on_road(car.x, car.y)
             car.move(dt, right_wheel_acceleration, left_wheel_acceleration, WHEEL_DISTANCE, on_road_before_move)
+            car.calculate_fitness(dt)
 
             if GRASS_ALLOWED:
                 on_road = check_if_on_road(car.x, car.y)
@@ -265,7 +268,7 @@ def run_cars(dt) -> None:
 
                 if not in_bounds or car.alive_time >= TIMEOUT:
                     car.alive = False
-                    car.calculate_fitness(dt)
+
 
 
 def check_if_on_road(x, y) -> bool:
